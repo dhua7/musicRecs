@@ -1,0 +1,71 @@
+# Ignore system files and directories
+/.anaconda/
+/.bash_history
+/.conda/
+/.condarc
+/.continuum/
+/.gitconfig
+/.idlerc/
+/.ipython/
+/.lesshst
+/.matplotlib/
+/.spyder-py3/
+/.ssh/
+/.viminfo/
+/.vscode/
+/3D Objects/
+/AppData/
+/Contacts/
+/Documents/
+/Downloads/
+/Favorites/
+/Jedi/
+/Links/
+/Music/
+/NTUSER.DAT*
+/OneDrive/
+/Pictures/
+/Saved Games/
+/Searches/
+/Videos/
+
+# Compiled source code
+*.class
+*.o
+*.so
+*.dll
+*.exe
+
+# Packages
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Logs
+*.log
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+ENV/
+env/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# pytest cache
+.pytest_cache/
+
