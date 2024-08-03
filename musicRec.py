@@ -1,5 +1,5 @@
 import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials
+from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
 import os
 
@@ -9,52 +9,69 @@ load_dotenv()
 # Access Credentials
 client_id = os.getenv('CLIENT_ID')
 client_secret = os.getenv('CLIENT_SECRET')
+redirect_uri = os.getenv('REDIRECT_URI')
+
 
 # Authenticate
-client_credentials_manager = SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
-sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+sp_oauth = SpotifyOAuth(client_id=client_id,
+                        client_secret=client_secret,
+                        redirect_uri=redirect_uri,
+                        scope='playlist-read-private')
+sp = spotipy.Spotify(auth_manager=sp_oauth)
 
-#get trackID from song title input
-def getTrackID(songTitle, artist=None):
-    query = f'track:{songTitle}'
-    if artist:
-        query += f'artist:{artist}'
-    results = sp.search(q=query, type='track', limit=1)
-    tracks = results['tracks']['items']
-    if tracks:
-        return tracks[0]['id']
-    else:
-        print(f'Track not found for {songTitle}')
-        return None
+
+#get playlists from user
+def getPlaylists():
+    playlists = []
+    results = sp.current_user_playlists()
+    playlists.extend(results['items'])
+
+    #handle pagination if necessary
+    while results['next']:
+        results = sp.next(results)
+        playlists.extend(results['items'])
+
+    return playlists
+
+#get tracks from playlist
+def getPlaylistTracks(playlistID):
+    tracks = []
+    results = sp.playlist_tracks(playlistID)
+    tracks.extend(results['items'])
+
+    #handle pagination if necessary
+    while results['next']:
+        results = sp.next(results)
+        tracks.extend(['items'])
+    
+    return tracks
+
 
 def getAudioFeatures(trackIds):
     features = sp.audio_features(trackIds)
     return features
 
+def main():
+    #retrieve user playlists
+    playlists = getPlaylists()
 
-# Prompt user for input
-print('insert 5 songs in the form song,artist here separated by semicolon: ')
-songInput = input()
+    # Display playlists to the user
+    for i, playlist in enumerate(playlists):
+        print(f"{i + 1}: {playlist['name']}")
 
-# Convert input string to a list of song IDs
-songAndArtists = songInput.split(';')
+    #prompt user to select a playlist
+    playlistIndex = int(input('enter the number of playlists you wnat to view: ')) - 1
+    if 0 <= playlistIndex < len(playlists):
+        selectedPlaylistId = playlists[playlistIndex]['id']
+        tracks = getPlaylistTracks(selectedPlaylistId)
+        trackIds = [track['track']['id'] for track in tracks]
 
-# Remove any leading/trailing whitespace from each song ID
-trackIds = []
-for songAndArtist in songAndArtists:
-    if ',' in songAndArtist:
-        sAndA = songAndArtist.split(',')
-        songTitle = sAndA[0]
-        songTitle = songTitle.strip()
-        Artist = sAndA[1]
-        Artist = Artist.strip()
+        #get audio features for tracks
+        features = getAudioFeatures(trackIds)
+        print(features)
+
     else:
-        songTitle = songAndArtist
-        Artist = []
+        print('Invalid playlist number')
 
-    #get audio features
-    trackId = getTrackID(songTitle, Artist)
-    trackIds.append(trackId)
-
-features = getAudioFeatures(trackIds)
-print(features)
+if __name__ == '__main__':
+    main()
