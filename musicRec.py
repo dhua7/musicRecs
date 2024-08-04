@@ -2,6 +2,10 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
 import os
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.cluster import KMeans
+from kneed import KneeLocator
 
 # load .envfile
 load_dotenv()
@@ -60,7 +64,7 @@ def main():
         print(f"{i + 1}: {playlist['name']}")
 
     #prompt user to select a playlist
-    playlistIndex = int(input('enter the number of playlists you wnat to view: ')) - 1
+    playlistIndex = int(input('enter the number of the playlist you wnat to view: ')) - 1
     if 0 <= playlistIndex < len(playlists):
         selectedPlaylistId = playlists[playlistIndex]['id']
         tracks = getPlaylistTracks(selectedPlaylistId)
@@ -72,6 +76,50 @@ def main():
 
     else:
         print('Invalid playlist number')
+    
+    #convert features to dataframe
+    df = pd.DataFrame(features)
+
+    # Select relevant features for clustering
+    songFeatures = df[['danceability', 'energy', 'key', 'loudness', 'mode', 
+               'speechiness', 'acousticness', 'instrumentalness', 'liveness', 
+               'valence', 'tempo']]
+    
+    #split data into training, validation, and test set
+    trainData, tempData = train_test_split(songFeatures, test_size = 0.3, random_state=42)
+    validationData,testData = train_test_split(tempData, test_size=0.5, random_state=42)
+
+    #train the model
+    #create arr of values for diff numbers of clusters we want to try
+    numClusters = range(2,11)
+
+    kMeansArr = []
+    inertia = []
+    #inertia is sum of squared distance between each data point and centroid of cluster to which it belonds
+    #lower inertia generally implies tighter clusters
+
+    for k in numClusters:
+        kmeans = KMeans(n_clusters=k, random_state=42)
+        kmeans.fit(trainData)
+        inertia.append(kmeans.inertia_)
+        kMeansArr.append(kmeans)
+
+    #find the elbow point using KneeLocator
+    elbowPointFind = KneeLocator(range(2,11), inertia, curve='convex', direction='decreasing')
+    bestNumClusters = elbowPointFind.elbow
+    bestKmeans = kMeansArr[bestNumClusters-1]    
+
+    print(f'Best number of clusters: {bestNumClusters}')
+    
+    #evaluate the best model on the validation set
+    validationPred = bestKmeans.predict(validationData)
+
+    #evaluate best model on test set
+    testPred = bestKmeans.predict(testData)
+
+   # print test set cluster assignments
+    print('Test set cluster assignments:')
+    print(testPred)
 
 if __name__ == '__main__':
     main()
