@@ -10,6 +10,7 @@ import string
 import random
 import time
 import numpy as np
+from flask import Flask, render_template, request
 
 # load .envfile
 load_dotenv()
@@ -27,6 +28,7 @@ sp_oauth = SpotifyOAuth(client_id=client_id,
                         scope='playlist-read-private')
 sp = spotipy.Spotify(auth_manager=sp_oauth)
 
+app = Flask(__name__)
 
 authLimit = 5000 #limit of requests per day per user
 searchLimit = 5 #search API requests to 5 per second per user
@@ -119,7 +121,104 @@ def getRandomTracks(limit=100):
     uniqueTrackIDs = list(uniqueTrackIDs)
     return randomTracks,uniqueTrackIDs
 
-def main():
+@app.route('/',methods=['GET','POST'])
+def index():
+    #initialize recommendations
+    recommendedTracksArr = []
+
+    #get the playlists
+    playlists = getPlaylists()
+
+    #if a number is input into playlistNumber
+    if request.method == 'POST':
+        playlistNumber = int(request.form['playlistNumber'])-1
+        
+        if 0 <= playlistNumber < len(playlists):
+            selectedPlaylistId = playlists[playlistNumber]['id']
+            tracks = getPlaylistTracks(selectedPlaylistId)
+            trackIds = [track['track']['id'] for track in tracks]
+
+            #get audio features for tracks
+            features = getAudioFeatures(trackIds)
+            print(features)
+
+        else:
+            print('Invalid playlist number')
+        
+        #convert features to dataframe
+        df = pd.DataFrame(features)
+
+        # Select relevant features for clustering
+        songFeatures = df[['danceability', 'energy', 'key', 'loudness', 'mode', 
+                'speechiness', 'acousticness', 'instrumentalness', 'liveness', 
+                'valence', 'tempo']]
+        
+        #split data into training, validation, and test set
+        trainData, tempData = train_test_split(songFeatures, test_size = 0.3, random_state=42)
+        validationData,testData = train_test_split(tempData, test_size=0.5, random_state=42)
+
+        #train the model
+        #create arr of values for diff numbers of clusters we want to try
+        numClusters = range(2,11)
+
+        kMeansArr = []
+        inertia = []
+        #inertia is sum of squared distance between each data point and centroid of cluster to which it belonds
+        #lower inertia generally implies tighter clusters
+
+        for k in numClusters:
+            kmeans = KMeans(n_clusters=k, random_state=42)
+            kmeans.fit(trainData)
+            inertia.append(kmeans.inertia_)
+            kMeansArr.append(kmeans)
+
+        #find the elbow point using KneeLocator
+        elbowPointFind = KneeLocator(range(2,11), inertia, curve='convex', direction='decreasing')
+        bestNumClusters = elbowPointFind.elbow
+        bestKmeans = kMeansArr[bestNumClusters-1]    
+
+        print(f'Best number of clusters: {bestNumClusters}')
+        
+        #evaluate the best model on the validation set
+        validationPred = bestKmeans.predict(validationData)
+
+        #evaluate best model on test set
+        testPred = bestKmeans.predict(testData)
+
+    # print test set cluster assignments
+        print('Test set cluster assignments:')
+        print(testPred)
+
+        #get random tracks to use to find recommencatin
+        randomTracks,uniqueTrackIDs = getRandomTracks(limit=100)
+        features2 = getAudioFeatures(uniqueTrackIDs)
+
+        df2 = pd.DataFrame(features2)
+        songFeatures2 = df2[['danceability', 'energy', 'key', 'loudness', 'mode', 
+                'speechiness', 'acousticness', 'instrumentalness', 'liveness', 
+                'valence', 'tempo']]
+        
+        recommendationPred = bestKmeans.predict(songFeatures2)
+        print('recommendation cluster assignments:')
+        print(recommendationPred)
+
+        #get user's most common cluster
+        userClusterList = bestKmeans.predict(songFeatures)
+        userCluster, counts = np.unique(userClusterList, return_counts = True)
+        userMainCluster = userCluster[np.argmax(counts)]
+
+        #filter recommendation based on user's cluster
+        recommendations = [randomTracks[i] for i in range(len(recommendationPred)) if recommendationPred[i] == userMainCluster]
+
+        #select 5 recommendations
+        recommendedTracks = recommendations[:5]
+        recommendedTracksArr = [{'name':track['name'], 'artists': [artist['name'] for artist in track['artists']]} for track in recommendedTracks]
+        
+    return render_template('index.html',playlists=playlists, recommendedTracksArr=recommendedTracksArr)
+
+if __name__ == '__main__':
+    app.run(debug=True)
+"""def main():
     try:
         #retrieve user playlists
         playlists = getPlaylists()
@@ -218,4 +317,4 @@ def main():
         print(f'An error occured: {e}')
 
 if __name__ == '__main__':
-    main()
+    main()"""
