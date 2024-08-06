@@ -9,6 +9,7 @@ from kneed import KneeLocator
 import string
 import random
 import time
+import numpy as np
 
 # load .envfile
 load_dotenv()
@@ -197,6 +198,21 @@ def main():
         recommendationPred = bestKmeans.predict(songFeatures2)
         print('recommendation cluster assignments:')
         print(recommendationPred)
+
+        #get user's most common cluster
+        userClusterList = bestKmeans.predict(songFeatures)
+        userCluster, counts = np.unique(userClusterList, return_counts = True)
+        userMainCluster = userCluster[np.argmax(counts)]
+
+        #filter recommendation based on user's cluster
+        recommendations = [randomTracks[i] for i in range(len(recommendationPred)) if recommendationPred[i] == userMainCluster]
+
+        #select 5 recommendations
+        recommendedTracks = recommendations[:5]
+        print('Recommended Tracks:')
+        for track in recommendedTracks:
+            artistNames = ', '.join([artist['name'] for artist in track['artists']])
+            print(f'{track['name']} by {artistNames}\n' )
 
     except Exception as e:
         print(f'An error occured: {e}')
